@@ -20,10 +20,14 @@ import {
   type SkillLevel,
 } from "@/lib/practice-plan";
 import { getRudimentById, RUDIMENTS_DB } from "@/lib/rudiments";
+import { useAuth } from "@/components/account/auth-provider";
+import { FeelLog } from "@/components/account/feel-log";
 import { Button } from "@/components/ui/button";
 import { NotationView } from "@/components/gauntlet/notation-view";
 import { PracticeSessionBar, PracticeTransport } from "@/components/practice/practice-session";
 import { PracticeSetup } from "@/components/practice/practice-setup";
+import { creditFinishedSession, recordPracticeSeconds } from "@/lib/progress-store";
+import { DAY_CREDIT_SECONDS } from "@/lib/progress";
 
 function subscribeDay() {
   return () => undefined;
@@ -63,6 +67,10 @@ export function PracticeStudio() {
   const bpmRef = useRef(80);
   const tempoShiftRef = useRef(0);
   const cuedRef = useRef(false);
+  const creditedRef = useRef(0);
+  const trackedIdRef = useRef<string | null>(null);
+  const sessionSecondsRef = useRef(0);
+  const { user } = useAuth();
 
   const basePlan = useMemo(
     () => buildPracticePlan({ minutes, skill, band, dayKey }, RUDIMENTS_DB),
@@ -93,6 +101,18 @@ export function PracticeStudio() {
       scheduler.dispose();
       schedulerRef.current = null;
       playingRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const id = trackedIdRef.current;
+      const seconds = Math.floor(elapsedRef.current / 1000) - creditedRef.current;
+      if (id && seconds > 0) {
+        creditedRef.current += seconds;
+        sessionSecondsRef.current += seconds;
+        void recordPracticeSeconds(id, seconds);
+      }
     };
   }, []);
 
@@ -134,7 +154,18 @@ export function PracticeStudio() {
   const rudiment = exercise ? getRudimentById(exercise.rudimentId) : undefined;
   const elapsedSeconds = elapsedMs / 1000;
 
+  function flushPractice() {
+    const id = trackedIdRef.current;
+    const seconds = Math.floor(elapsedRef.current / 1000) - creditedRef.current;
+    if (id && seconds > 0) {
+      creditedRef.current += seconds;
+      sessionSecondsRef.current += seconds;
+      if (user) void recordPracticeSeconds(id, seconds);
+    }
+  }
+
   function loadExercise(nextPlan: PracticePlan, index: number, autoplay: boolean) {
+    flushPractice();
     const next = currentExercise(nextPlan, index);
     const nextRudiment = next ? getRudimentById(next.rudimentId) : undefined;
     if (!next || !nextRudiment) {
@@ -147,6 +178,8 @@ export function PracticeStudio() {
     cuedRef.current = false;
     tempoShiftRef.current = 0;
     setTempoShift(0);
+    trackedIdRef.current = next.rudimentId;
+    creditedRef.current = 0;
     const nextBpm = exerciseBpm(next, 0);
     bpmRef.current = nextBpm;
     setExerciseIndex(index);
@@ -169,6 +202,8 @@ export function PracticeStudio() {
   }
 
   function startPlan() {
+    flushPractice();
+    sessionSecondsRef.current = 0;
     const existing = planRef.current;
     const nextPlan =
       existing && existing.minutes === minutes && existing.skill === skill && existing.band === band
@@ -186,6 +221,7 @@ export function PracticeStudio() {
   }
 
   function swapCurrent() {
+    flushPractice();
     const currentPlan = planRef.current;
     if (!currentPlan) return;
     const slot = slotForExercise(currentPlan, exerciseIndexRef.current);
@@ -196,7 +232,9 @@ export function PracticeStudio() {
     setPlan(nextPlan);
     const next = currentExercise(nextPlan, exerciseIndexRef.current);
     const nextRudiment = next ? getRudimentById(next.rudimentId) : undefined;
-    if (!nextRudiment) return;
+    if (!next || !nextRudiment) return;
+    trackedIdRef.current = next.rudimentId;
+    creditedRef.current = Math.floor(elapsedRef.current / 1000);
     const sched = schedulerRef.current;
     if (!sched) return;
     sched.setRudiment(nextRudiment);
@@ -287,6 +325,10 @@ export function PracticeStudio() {
   }
 
   function finish() {
+    flushPractice();
+    if (user && sessionSecondsRef.current >= DAY_CREDIT_SECONDS) {
+      void creditFinishedSession(sessionSecondsRef.current);
+    }
     playingRef.current = false;
     schedulerRef.current?.stop();
     setPlaying(false);
@@ -295,6 +337,9 @@ export function PracticeStudio() {
   }
 
   function backToSetup() {
+    flushPractice();
+    trackedIdRef.current = null;
+    creditedRef.current = 0;
     const current = planRef.current;
     playingRef.current = false;
     schedulerRef.current?.stop();
@@ -363,6 +408,17 @@ export function PracticeStudio() {
         onNext={goNext}
       />
       {audioError ? <p className="text-sm text-accent">{audioError}</p> : null}
+      {finished && user ? (
+        <section className="rounded-2xl border border-line bg-panel p-4">
+          <h3 className="text-lg font-semibold text-ink">How did it feel?</h3>
+          <p className="mt-1 text-sm text-muted">Save a short note for later.</p>
+          <div className="mt-4 space-y-3">
+            {[...new Set(plan.rudimentIds)].map((id) => (
+              <FeelLog key={id} rudimentId={id} title={getRudimentById(id)?.name ?? id} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       {finished ? null : (
         <Button
           tone={metronome ? "accent" : "quiet"}

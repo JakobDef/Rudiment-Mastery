@@ -22,6 +22,7 @@ import { GauntletMode } from "@/components/gauntlet/gauntlet-mode";
 import { NotationView } from "@/components/gauntlet/notation-view";
 import { RudimentLibrary } from "@/components/gauntlet/rudiment-library";
 import { TransportBar } from "@/components/gauntlet/transport-bar";
+import { recordPracticeSeconds } from "@/lib/progress-store";
 
 export function GauntletStudio() {
   const initial = RUDIMENTS_DB[0];
@@ -48,6 +49,19 @@ export function GauntletStudio() {
   const schedulerRef = useRef<AudioScheduler | null>(null);
   const workoutRef = useRef<WorkoutState | null>(null);
   const tapsRef = useRef<number[]>([]);
+  const playStartedRef = useRef(0);
+  const playRudimentRef = useRef("");
+
+  function flushGauntlet(nextId?: string) {
+    const id = playRudimentRef.current;
+    const started = playStartedRef.current;
+    if (id && started > 0) {
+      const seconds = Math.floor((performance.now() - started) / 1000);
+      if (seconds > 0) void recordPracticeSeconds(id, seconds);
+    }
+    playRudimentRef.current = nextId ?? "";
+    playStartedRef.current = nextId ? performance.now() : 0;
+  }
 
   useLayoutEffect(() => {
     return () => setLibraryOpen(false);
@@ -60,6 +74,7 @@ export function GauntletStudio() {
       onActiveNote: (index) => setActiveIndex(index),
       onRepetition: (next) => setRepetition(next),
       onEnded: () => {
+        flushGauntlet();
         setPlaying(false);
         workoutRef.current = null;
         setWorkout(null);
@@ -79,6 +94,7 @@ export function GauntletStudio() {
         if (next.mode === "queue" && nextId && nextId !== previousId) {
           const rudiment = getRudimentById(nextId);
           if (rudiment) {
+            flushGauntlet(rudiment.id);
             sched.setRudiment(rudiment);
             setRudimentId(rudiment.id);
           }
@@ -87,6 +103,7 @@ export function GauntletStudio() {
     });
 
     return () => {
+      flushGauntlet();
       scheduler.dispose();
       schedulerRef.current = null;
       workoutRef.current = null;
@@ -117,6 +134,7 @@ export function GauntletStudio() {
   const rudiment = getRudimentById(rudimentId) ?? initial;
 
   function stopPlayback() {
+    flushGauntlet();
     schedulerRef.current?.stop();
     workoutRef.current = null;
     setWorkout(null);
@@ -135,7 +153,12 @@ export function GauntletStudio() {
     const started = sched.start();
     setPlaying(started);
     setAudioError(started ? null : "The browser blocked sound. Click play again.");
-    if (!started) {
+    if (started) {
+      playRudimentRef.current = nextId;
+      playStartedRef.current = performance.now();
+    } else {
+      playRudimentRef.current = "";
+      playStartedRef.current = 0;
       workoutRef.current = null;
       setWorkout(null);
     }
@@ -186,6 +209,7 @@ export function GauntletStudio() {
   }
 
   function startWorkout() {
+    flushGauntlet();
     const ids =
       mode === "queue" ? (queueIds.length > 0 ? queueIds : [rudimentId]) : [rudimentId];
     const next = createWorkout({

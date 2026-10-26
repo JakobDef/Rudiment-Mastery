@@ -18,6 +18,8 @@ import {
   type Accent,
   type MetronomeSettings,
 } from "@/lib/metronome";
+import { METRONOME_SOURCE } from "@/lib/progress";
+import { recordPracticeSeconds } from "@/lib/progress-store";
 
 function choiceClass(selected: boolean): string {
   return selected
@@ -73,6 +75,15 @@ export function PracticeMetronome() {
       setFrame(null);
     };
   }, []);
+
+  useEffect(() => {
+    if (!playing) return;
+    const startedAt = performance.now();
+    return () => {
+      const seconds = Math.floor((performance.now() - startedAt) / 1000);
+      if (seconds > 0) void recordPracticeSeconds(METRONOME_SOURCE, seconds);
+    };
+  }, [playing]);
 
   useEffect(() => {
     engineRef.current?.update({
