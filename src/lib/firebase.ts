@@ -1,6 +1,11 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  type Firestore,
+} from "firebase/firestore";
 
 export type FirebaseConfig = {
   apiKey: string;
@@ -47,10 +52,16 @@ export function getFirebase(): FirebaseServices | null {
   if (!config) return null;
   if (cached) return cached;
   const app = getApps().length > 0 ? getApp() : initializeApp(config);
+  let db: Firestore;
+  try {
+    db = initializeFirestore(app, { localCache: persistentLocalCache() });
+  } catch {
+    db = getFirestore(app);
+  }
   cached = {
     app,
     auth: getAuth(app),
-    db: getFirestore(app),
+    db,
   };
   return cached;
 }

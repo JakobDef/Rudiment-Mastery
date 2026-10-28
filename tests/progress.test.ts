@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   addDayKey,
   currentStreak,
+  formatBpmRange,
+  formatLogStamp,
   formatPracticeTime,
   monthGrid,
   qualifiesForDayCredit,
@@ -39,6 +41,13 @@ describe("progress", () => {
     expect(formatPracticeTime(40)).toBe("40s");
     expect(formatPracticeTime(90)).toBe("1 min");
     expect(formatPracticeTime(3720)).toBe("1h 2m");
+  });
+
+  it("formats tempo ranges and log dates", () => {
+    expect(formatBpmRange(80, 80)).toBe("80 BPM");
+    expect(formatBpmRange(70, 78)).toBe("70-78 BPM");
+    expect(formatLogStamp(0)).toBe("Just now");
+    expect(formatLogStamp(new Date(2026, 9, 21, 12, 0).getTime())).toContain("2026");
   });
 
   it("credits a day only after five minutes", () => {

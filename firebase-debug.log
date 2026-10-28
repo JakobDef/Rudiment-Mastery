@@ -1,0 +1,56 @@
+[debug] [2026-10-26T18:39:14.427Z] ----------------------------------------------------------------------
+[debug] [2026-10-26T18:39:14.430Z] Command:       /Users/jakob/.nvm/versions/node/v22.14.0/bin/node /Users/jakob/.nvm/versions/node/v22.14.0/bin/firebase projects:list
+[debug] [2026-10-26T18:39:14.435Z] CLI Version:   15.27.0
+[debug] [2026-10-26T18:39:14.435Z] Platform:      darwin
+[debug] [2026-10-26T18:39:14.435Z] Node Version:  v22.14.0
+[debug] [2026-10-26T18:39:14.435Z] Detected Agent: cursor
+[debug] [2026-10-26T18:39:14.435Z] Time:          Mon Oct 26 2026 19:39:14 GMT+0100 (Central European Standard Time)
+[debug] [2026-10-26T18:39:14.435Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-10-26T18:39:14.440Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-10-26T18:39:14.447Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-10-26T18:39:14.448Z] > authorizing via signed-in user (jakob.defranceschi@gmail.com)
+[debug] [2026-10-26T18:39:14.449Z] Checked if tokens are valid: false, expires at: 1787072371589
+[debug] [2026-10-26T18:39:14.449Z] Checked if tokens are valid: false, expires at: 1787072371589
+[debug] [2026-10-26T18:39:14.449Z] > refreshing access token with scopes: []
+[debug] [2026-10-26T18:39:14.449Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-10-26T18:39:14.449Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-10-26T18:39:14.508Z] *** [apiv2] error from fetch(https://firebase-public.firebaseio.com/cli.json, {"headers":{},"method":"GET","dispatcher":{"_events":{},"_eventsCount":0}}): Error: Request was cancelled.
+[warn] ⚠  Unable to fetch the CLI MOTD and remote config. This is not a fatal error, but may indicate an issue with your network connection. 
+[debug] [2026-10-26T18:39:14.508Z] Failed to fetch MOTD FirebaseError: Failed to make request to https://firebase-public.firebaseio.com/cli.json
+[debug] [2026-10-26T18:39:14.670Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-10-26T18:39:14.670Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-10-26T18:39:14.671Z] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-10-26T18:39:14.671Z] FirebaseError: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+    at invalidCredentialError (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/auth.js:178:12)
+    at refreshTokens (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/auth.js:607:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async getAccessToken (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/apiv2.js:53:18)
+    at async Client.addAuthHeader (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/apiv2.js:209:21)
+    at async Client.request (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/apiv2.js:156:34)
+    at async getProjectPage (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/management/projects.js:287:17)
+    at async getFirebaseProjectPage (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/management/projects.js:304:23)
+    at async listFirebaseProjects (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/management/projects.js:333:29)
+    at async Command.actionFn (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/commands/projects-list.js:51:20)
+[error] 
+[error] Error: Failed to list Firebase projects. See firebase-debug.log for more info.
+[debug] [2026-10-26T18:39:14.932Z] Error: EPERM: operation not permitted, open '/Users/jakob/.config/configstore/firebase-tools.json.1165720217'
+    at Object.openSync (node:fs:562:18)
+    at Function.writeFileSync [as sync] (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/node_modules/write-file-atomic/index.js:205:13)
+    at set all (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/node_modules/configstore/index.js:61:20)
+    at Configstore.delete (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/node_modules/configstore/index.js:101:12)
+    at process.<anonymous> (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/bin/cli.js:95:45)
+    at process.emit (node:events:530:35)
+    at process.exit (node:internal/process/per_thread:184:15)
+    at Timeout._onTimeout (/Users/jakob/.nvm/versions/node/v22.14.0/lib/node_modules/firebase-tools/lib/errorOut.js:20:17)
+    at listOnTimeout (node:internal/timers:594:17)
+    at process.processTimers (node:internal/timers:529:7)
+[error] 
+[error] Error: An unexpected error has occurred.

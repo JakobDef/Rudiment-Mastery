@@ -72,6 +72,24 @@ export function monthGrid(
   return cells;
 }
 
+export function formatLogStamp(createdAt: number): string {
+  if (!createdAt) return "Just now";
+  return new Date(createdAt).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function formatBpmRange(startBpm: number, endBpm: number): string {
+  if (startBpm === endBpm) return `${startBpm} BPM`;
+  const low = Math.min(startBpm, endBpm);
+  const high = Math.max(startBpm, endBpm);
+  return `${low}-${high} BPM`;
+}
+
 export function formatPracticeTime(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(safe / 3600);

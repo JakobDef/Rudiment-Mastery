@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { getFirebase, googleProvider, isFirebaseConfigured } from "@/lib/firebase";
+import { creditPracticeDay } from "@/lib/progress-store";
 
 type AuthContextValue = {
   configured: boolean;
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
           { merge: true },
         );
+        await creditPracticeDay("2026-10-26");
       } catch {
         return;
       }

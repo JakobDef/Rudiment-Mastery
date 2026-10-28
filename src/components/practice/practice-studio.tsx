@@ -70,7 +70,25 @@ export function PracticeStudio() {
   const creditedRef = useRef(0);
   const trackedIdRef = useRef<string | null>(null);
   const sessionSecondsRef = useRef(0);
+  const temposRef = useRef<Record<number, { startBpm: number; endBpm: number }>>({});
+  const [exerciseTempos, setExerciseTempos] = useState<
+    Record<number, { startBpm: number; endBpm: number }>
+  >({});
   const { user } = useAuth();
+
+  function rememberTempo(
+    index: number,
+    current: NonNullable<ReturnType<typeof currentExercise>>,
+    shift: number,
+  ) {
+    const shifted = shiftExerciseTempo(current, shift);
+    const next = {
+      ...temposRef.current,
+      [index]: { startBpm: shifted.startBpm, endBpm: shifted.endBpm },
+    };
+    temposRef.current = next;
+    setExerciseTempos(next);
+  }
 
   const basePlan = useMemo(
     () => buildPracticePlan({ minutes, skill, band, dayKey }, RUDIMENTS_DB),
@@ -165,6 +183,11 @@ export function PracticeStudio() {
   }
 
   function loadExercise(nextPlan: PracticePlan, index: number, autoplay: boolean) {
+    const leaving =
+      trackedIdRef.current && planRef.current === nextPlan
+        ? currentExercise(nextPlan, exerciseIndexRef.current)
+        : null;
+    if (leaving) rememberTempo(exerciseIndexRef.current, leaving, tempoShiftRef.current);
     flushPractice();
     const next = currentExercise(nextPlan, index);
     const nextRudiment = next ? getRudimentById(next.rudimentId) : undefined;
@@ -180,6 +203,7 @@ export function PracticeStudio() {
     setTempoShift(0);
     trackedIdRef.current = next.rudimentId;
     creditedRef.current = 0;
+    if (temposRef.current[index] === undefined) rememberTempo(index, next, 0);
     const nextBpm = exerciseBpm(next, 0);
     bpmRef.current = nextBpm;
     setExerciseIndex(index);
@@ -204,6 +228,9 @@ export function PracticeStudio() {
   function startPlan() {
     flushPractice();
     sessionSecondsRef.current = 0;
+    temposRef.current = {};
+    setExerciseTempos({});
+    trackedIdRef.current = null;
     const existing = planRef.current;
     const nextPlan =
       existing && existing.minutes === minutes && existing.skill === skill && existing.band === band
@@ -235,6 +262,7 @@ export function PracticeStudio() {
     if (!next || !nextRudiment) return;
     trackedIdRef.current = next.rudimentId;
     creditedRef.current = Math.floor(elapsedRef.current / 1000);
+    rememberTempo(exerciseIndexRef.current, next, tempoShiftRef.current);
     const sched = schedulerRef.current;
     if (!sched) return;
     sched.setRudiment(nextRudiment);
@@ -251,6 +279,7 @@ export function PracticeStudio() {
     const shift = clampTempoShift(current, nextShift);
     tempoShiftRef.current = shift;
     setTempoShift(shift);
+    rememberTempo(exerciseIndexRef.current, current, shift);
     const nextBpm = exerciseBpm(shiftExerciseTempo(current, shift), elapsedRef.current / 1000);
     bpmRef.current = nextBpm;
     setBpm(nextBpm);
@@ -325,6 +354,10 @@ export function PracticeStudio() {
   }
 
   function finish() {
+    const leaving = planRef.current
+      ? currentExercise(planRef.current, exerciseIndexRef.current)
+      : null;
+    if (leaving) rememberTempo(exerciseIndexRef.current, leaving, tempoShiftRef.current);
     flushPractice();
     if (user && sessionSecondsRef.current >= DAY_CREDIT_SECONDS) {
       void creditFinishedSession(sessionSecondsRef.current);
@@ -413,9 +446,27 @@ export function PracticeStudio() {
           <h3 className="text-lg font-semibold text-ink">How did it feel?</h3>
           <p className="mt-1 text-sm text-muted">Save a short note for later.</p>
           <div className="mt-4 space-y-3">
-            {[...new Set(plan.rudimentIds)].map((id) => (
-              <FeelLog key={id} rudimentId={id} title={getRudimentById(id)?.name ?? id} />
-            ))}
+            {plan.rudimentIds.map((id) => {
+              const slots = plan.exercises
+                .map((item, index) => ({ item, index }))
+                .filter((slot) => slot.item.rudimentId === id);
+              const warmup = slots.find((slot) => slot.item.phase === "warmup") ?? slots[0];
+              const push = [...slots].reverse().find((slot) => slot.item.phase === "push") ?? slots[slots.length - 1];
+              if (!warmup || !push) return null;
+              const startBpm =
+                exerciseTempos[warmup.index]?.startBpm ?? warmup.item.startBpm;
+              const endBpm = exerciseTempos[push.index]?.endBpm ?? push.item.endBpm;
+              const name = getRudimentById(id)?.name ?? id;
+              return (
+                <FeelLog
+                  key={id}
+                  rudimentId={id}
+                  title={name}
+                  defaultStartBpm={startBpm}
+                  defaultEndBpm={endBpm}
+                />
+              );
+            })}
           </div>
         </section>
       ) : null}

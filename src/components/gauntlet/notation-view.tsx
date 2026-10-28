@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   noteDuration,
   type NoteOrnament,
@@ -8,13 +10,39 @@ import {
 
 const STAFF_Y = 78;
 const UNIT = 36;
+const LEFT = 58;
+const ROW_HEIGHT = 120;
 
 interface LaidOutNote {
   index: number;
   x: number;
+  y: number;
+  row: number;
   duration: number;
   beamCount: number;
   note: RudimentNote;
+}
+
+export function beatsPerNotationLine({
+  width,
+  subdivision,
+  beats,
+  totalUnits,
+}: {
+  width: number;
+  subdivision: number;
+  beats: number;
+  totalUnits: number;
+}): number {
+  const unitsPerBeat = subdivision > 0 ? subdivision : 4;
+  const totalBeats = Math.max(1, Math.ceil(totalUnits / unitsPerBeat));
+  const needed = LEFT + totalUnits * UNIT + 40;
+  if (width <= 0) return Math.max(1, beats);
+  if (needed <= width) return totalBeats;
+  const usable = Math.max(UNIT, width - LEFT - 40);
+  const fitBeats = Math.max(1, Math.floor(usable / (unitsPerBeat * UNIT)));
+  if (fitBeats >= beats) return Math.max(beats, Math.floor(fitBeats / beats) * beats);
+  return fitBeats;
 }
 
 function beamLevels(duration: number, subdivision: number): number {
@@ -32,43 +60,78 @@ function gracePositions(ornament: NoteOrnament, x: number): number[] {
   return [];
 }
 
-function layoutRudiment(rudiment: Rudiment): {
+function layoutRudiment(rudiment: Rudiment, lineBeats: number): {
   notes: LaidOutNote[];
   groups: LaidOutNote[][];
   width: number;
+  height: number;
+  rows: number;
 } {
-  const notes: LaidOutNote[] = [];
-  let cursor = 0;
+  const raw: Omit<LaidOutNote, "x" | "y" | "row">[] = [];
   rudiment.notes.forEach((note, index) => {
     const duration = noteDuration(note);
-    notes.push({
+    raw.push({
       index,
-      x: 58 + cursor * UNIT,
       duration,
       beamCount: beamLevels(duration, rudiment.subdivision),
       note,
     });
-    cursor += duration;
   });
 
-  const groups: LaidOutNote[][] = [];
-  let group: LaidOutNote[] = [];
+  const beatGroups: (typeof raw)[] = [];
+  let group: typeof raw = [];
   let filled = 0;
-  for (const item of notes) {
+  for (const item of raw) {
     group.push(item);
     filled += item.duration;
     if (filled >= rudiment.subdivision - 1e-6) {
-      groups.push(group);
+      beatGroups.push(group);
       group = [];
       filled = 0;
     }
   }
-  if (group.length > 0) groups.push(group);
+  if (group.length > 0) beatGroups.push(group);
 
+  const placed: LaidOutNote[][] = [];
+  let row = 0;
+  let rowCursor = 0;
+  let beatsOnRow = 0;
+  let maxRowUnits = 0;
+  const safeLineBeats = Math.max(1, lineBeats);
+
+  const laid: LaidOutNote[] = [];
+  beatGroups.forEach((items) => {
+    if (beatsOnRow >= safeLineBeats && rowCursor > 0) {
+      maxRowUnits = Math.max(maxRowUnits, rowCursor);
+      row += 1;
+      rowCursor = 0;
+      beatsOnRow = 0;
+    }
+    const y = STAFF_Y + row * ROW_HEIGHT;
+    const nextGroup: LaidOutNote[] = [];
+    items.forEach((item) => {
+      const next: LaidOutNote = {
+        ...item,
+        x: LEFT + rowCursor * UNIT,
+        y,
+        row,
+      };
+      rowCursor += item.duration;
+      nextGroup.push(next);
+      laid.push(next);
+    });
+    placed.push(nextGroup);
+    beatsOnRow += 1;
+  });
+  maxRowUnits = Math.max(maxRowUnits, rowCursor);
+
+  const rows = row + 1;
   return {
-    notes,
-    groups,
-    width: Math.max(320, 58 + cursor * UNIT + 40),
+    notes: laid,
+    groups: placed,
+    width: Math.max(320, LEFT + maxRowUnits * UNIT + 40),
+    height: STAFF_Y + (rows - 1) * ROW_HEIGHT + 72,
+    rows,
   };
 }
 
@@ -80,10 +143,11 @@ function noteFill(note: RudimentNote, active: boolean): string {
 }
 
 function BeamGroups({ groups }: { groups: LaidOutNote[][] }) {
-  const stemTop = STAFF_Y - 36;
   const marks: ReactNode[] = [];
 
   groups.forEach((group, groupIndex) => {
+    const staffY = group[0]?.y ?? STAFF_Y;
+    const stemTop = staffY - 36;
     const peak = group.reduce((highest, item) => Math.max(highest, item.beamCount), 0);
     for (let level = 1; level <= peak; level += 1) {
       let run: LaidOutNote[] = [];
@@ -142,14 +206,14 @@ function TupletMarks({
   subdivision: number;
 }) {
   if (subdivision !== 3 && subdivision !== 6) return null;
-  const stemTop = STAFF_Y - 36;
-  const bracketY = stemTop - 22;
   return (
     <g>
       {groups.map((group, groupIndex) => {
         const first = group[0];
         const last = group[group.length - 1];
         if (!first || !last) return null;
+        const stemTop = first.y - 36;
+        const bracketY = stemTop - 22;
         const left = first.x + 7;
         const right = last.x + 7;
         const mid = (left + right) / 2;
@@ -195,18 +259,41 @@ export function NotationView({
   rudiment: Rudiment;
   activeIndex: number | null;
 }) {
-  const layout = layoutRudiment(rudiment);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+  const totalUnits = rudiment.notes.reduce((sum, note) => sum + noteDuration(note), 0);
+  const lineBeats = beatsPerNotationLine({
+    width,
+    subdivision: rudiment.subdivision,
+    beats: rudiment.timeSignature[0],
+    totalUnits,
+  });
+  const layout = layoutRudiment(rudiment, lineBeats);
   const [beats, division] = rudiment.timeSignature;
 
+  useEffect(() => {
+    const node = boxRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect.width ?? 0;
+      setWidth(next);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const staffRows = Array.from({ length: layout.rows }, (_, row) => STAFF_Y + row * ROW_HEIGHT);
+
   return (
-    <div className="overflow-x-auto rounded-2xl border border-line bg-panel p-3">
+    <div ref={boxRef} className="overflow-x-auto rounded-2xl border border-line bg-panel p-3">
       <svg
-        width={layout.width}
-        height={180}
-        viewBox={`0 0 ${layout.width} 180`}
+        width="100%"
+        height={layout.height}
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        preserveAspectRatio="xMidYMin meet"
         role="img"
         aria-label={`${rudiment.name} on a single snare line`}
-        className="mx-auto block max-w-none"
+        className="mx-auto block"
       >
         <text x={14} y={STAFF_Y - 8} className="fill-ink text-lg font-semibold">
           {beats}
@@ -214,14 +301,17 @@ export function NotationView({
         <text x={14} y={STAFF_Y + 16} className="fill-ink text-lg font-semibold">
           {division}
         </text>
-        <line
-          x1={48}
-          y1={STAFF_Y}
-          x2={layout.width - 16}
-          y2={STAFF_Y}
-          className="stroke-staff"
-          strokeWidth={1.75}
-        />
+        {staffRows.map((y) => (
+          <line
+            key={`staff-${y}`}
+            x1={48}
+            y1={y}
+            x2={layout.width - 16}
+            y2={y}
+            className="stroke-staff"
+            strokeWidth={1.75}
+          />
+        ))}
         {layout.notes.map((item) => {
           const active = item.index === activeIndex;
           if (!active) return null;
@@ -229,9 +319,9 @@ export function NotationView({
             <line
               key={`playhead-${item.index}`}
               x1={item.x}
-              y1={16}
+              y1={item.y - 62}
               x2={item.x}
-              y2={168}
+              y2={item.y + 90}
               className="stroke-active"
               strokeWidth={2}
             />
@@ -242,7 +332,7 @@ export function NotationView({
         {layout.notes.map((item) => {
           const active = item.index === activeIndex;
           const ornament = item.note.ornament ?? "none";
-          const stemTop = item.beamCount > 0 ? STAFF_Y - 36 : STAFF_Y - 30;
+          const stemTop = item.beamCount > 0 ? item.y - 36 : item.y - 30;
           const graces = gracePositions(ornament, item.x);
           const firstGrace = graces[0];
           const lastGrace = graces[graces.length - 1];
@@ -250,12 +340,12 @@ export function NotationView({
             <g key={`${rudiment.id}-${item.index}`} aria-current={active ? "true" : undefined}>
               {graces.map((graceX) => (
                 <g key={`${item.index}-grace-${graceX}`}>
-                  <ellipse cx={graceX} cy={STAFF_Y - 18} rx={4} ry={3} className="fill-ghost" />
+                  <ellipse cx={graceX} cy={item.y - 18} rx={4} ry={3} className="fill-ghost" />
                   <line
                     x1={graceX + 4}
-                    y1={STAFF_Y - 18}
+                    y1={item.y - 18}
                     x2={graceX + 4}
-                    y2={STAFF_Y - 32}
+                    y2={item.y - 32}
                     className="stroke-ghost"
                     strokeWidth={1}
                   />
@@ -263,14 +353,14 @@ export function NotationView({
               ))}
               {firstGrace !== undefined && lastGrace !== undefined ? (
                 <path
-                  d={`M ${lastGrace} ${STAFF_Y - 12} Q ${item.x - 10} ${STAFF_Y - 6} ${item.x - 7} ${STAFF_Y}`}
+                  d={`M ${lastGrace} ${item.y - 12} Q ${item.x - 10} ${item.y - 6} ${item.x - 7} ${item.y}`}
                   className="fill-none stroke-muted"
                   strokeWidth={1}
                 />
               ) : null}
               <line
                 x1={item.x + 7}
-                y1={STAFF_Y - 2}
+                y1={item.y - 2}
                 x2={item.x + 7}
                 y2={stemTop}
                 className="stroke-ink"
@@ -293,7 +383,7 @@ export function NotationView({
                 : null}
               <ellipse
                 cx={item.x}
-                cy={STAFF_Y}
+                cy={item.y}
                 rx={7}
                 ry={5}
                 className={noteFill(item.note, active)}
@@ -302,7 +392,7 @@ export function NotationView({
               {item.note.accent ? (
                 <text
                   x={item.x}
-                  y={STAFF_Y - 44}
+                  y={item.y - 44}
                   textAnchor="middle"
                   className="fill-accent text-sm font-semibold"
                 >
@@ -311,17 +401,17 @@ export function NotationView({
               ) : null}
               {item.note.ghost ? (
                 <g className="fill-ghost text-sm">
-                  <text x={item.x - 14} y={STAFF_Y + 4} textAnchor="middle">
+                  <text x={item.x - 14} y={item.y + 4} textAnchor="middle">
                     {"("}
                   </text>
-                  <text x={item.x + 14} y={STAFF_Y + 4} textAnchor="middle">
+                  <text x={item.x + 14} y={item.y + 4} textAnchor="middle">
                     {")"}
                   </text>
                 </g>
               ) : null}
               <text
                 x={item.x}
-                y={STAFF_Y + 32}
+                y={item.y + 32}
                 textAnchor="middle"
                 className={active ? "fill-active text-sm font-semibold" : "fill-ink text-sm font-semibold"}
               >

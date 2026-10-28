@@ -42,9 +42,8 @@ export function graceLeadSeconds(
   return RUFF_LEAD_SECONDS.map((lead) => lead * scale);
 }
 
-export function diddleGapSeconds(bpm: number, noteSeconds: number): number {
-  const scaled = 0.03 * tempoScale(bpm);
-  return Math.min(scaled, Math.max(0.012, noteSeconds * 0.45));
+export function diddleGapSeconds(_bpm: number, noteSeconds: number): number {
+  return Math.max(0.018, noteSeconds * 0.5);
 }
 
 export function noteOnsetSeconds(rudiment: Rudiment, bpm: number): number[] {

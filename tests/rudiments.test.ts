@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  diddleGapSeconds,
   graceLeadSeconds,
   noteOnsetSeconds,
   patternSeconds,
@@ -58,6 +59,11 @@ describe("scheduler timing", () => {
         noteDuration(lastNote ?? { hand: "R" }) * stepSeconds(rudiment.defaultBpm, rudiment.subdivision);
       expect(release).toBeCloseTo(patternSeconds(rudiment, rudiment.defaultBpm));
     }
+  });
+
+  it("places a diddle as two even strokes inside the written note", () => {
+    expect(diddleGapSeconds(85, 0.176)).toBeCloseTo(0.088);
+    expect(diddleGapSeconds(150, 0.1)).toBeCloseTo(0.05);
   });
 
   it("places flam and drag grace notes at 25ms, 45ms, and 22ms when the tempo is 100", () => {

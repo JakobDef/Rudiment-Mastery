@@ -17,6 +17,8 @@ import {
   type Difficulty,
   type RudimentCategory,
 } from "@/lib/rudiments";
+import { FeelLog } from "@/components/account/feel-log";
+import { useAuth } from "@/components/account/auth-provider";
 import { Button } from "@/components/ui/button";
 import { GauntletMode } from "@/components/gauntlet/gauntlet-mode";
 import { NotationView } from "@/components/gauntlet/notation-view";
@@ -45,6 +47,8 @@ export function GauntletStudio() {
   const [query, setQuery] = useState("");
   const [queueIds, setQueueIds] = useState<string[]>(initial ? [initial.id] : []);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const { user, configured, signIn } = useAuth();
 
   const schedulerRef = useRef<AudioScheduler | null>(null);
   const workoutRef = useRef<WorkoutState | null>(null);
@@ -206,6 +210,7 @@ export function GauntletStudio() {
     setStartBpm(next.defaultBpm);
     setTargetBpm(next.targetBpm);
     setLibraryOpen(false);
+    setLogOpen(false);
   }
 
   function startWorkout() {
@@ -273,11 +278,43 @@ export function GauntletStudio() {
             <h1 className="text-2xl font-semibold text-ink">{rudiment.name}</h1>
             <p className="mt-1 max-w-2xl text-sm text-muted">{rudiment.description}</p>
           </div>
-          <Button tone="panel" className="lg:hidden" onClick={() => setLibraryOpen(true)}>
-            Library
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button tone="panel" className="lg:hidden" onClick={() => setLibraryOpen(true)}>
+              Library
+            </Button>
+            {configured && !user ? (
+              <Button tone="quiet" onClick={() => void signIn()}>
+                Sign in to log
+              </Button>
+            ) : null}
+            {user ? (
+              <Button tone={logOpen ? "accent" : "panel"} onClick={() => setLogOpen((value) => !value)}>
+                {logOpen ? "Close log" : "Add log"}
+              </Button>
+            ) : null}
+          </div>
         </header>
         <NotationView rudiment={rudiment} activeIndex={activeIndex} />
+        {user ? (
+          <section className="rounded-2xl border border-line bg-panel p-4">
+            <h2 className="text-sm font-semibold text-ink">Logs</h2>
+            <p className="mt-1 text-xs text-muted">Notes from Practice and Pad Gauntlet show up here.</p>
+            {logOpen ? (
+              <div className="mt-3">
+                <FeelLog
+                  key={`${rudiment.id}-${startBpm}-${targetBpm}`}
+                  rudimentId={rudiment.id}
+                  defaultStartBpm={startBpm}
+                  defaultEndBpm={targetBpm}
+                  showHistory={false}
+                />
+              </div>
+            ) : null}
+            <div className="mt-3">
+              <FeelLog rudimentId={rudiment.id} showForm={false} />
+            </div>
+          </section>
+        ) : null}
         {audioError ? <p className="text-sm text-accent">{audioError}</p> : null}
         <TransportBar
           bpm={bpm}

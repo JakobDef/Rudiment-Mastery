@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -36,6 +37,15 @@ export type RudimentLog = {
   ease: Ease;
   note: string;
   createdAt: number;
+  startBpm: number;
+  endBpm: number;
+};
+
+export type RudimentLogInput = {
+  ease: Ease;
+  note: string;
+  startBpm: number;
+  endBpm: number;
 };
 
 function userId(): string | null {
@@ -85,16 +95,20 @@ export async function recordPracticeSeconds(sourceId: string, seconds: number): 
 }
 
 export async function creditFinishedSession(sessionSeconds: number): Promise<void> {
+  if (!qualifiesForDayCredit(sessionSeconds)) return;
+  await creditPracticeDay(localDayKey(new Date()), Math.floor(sessionSeconds));
+}
+
+export async function creditPracticeDay(dayKey: string, sessionSeconds = DAY_CREDIT_SECONDS): Promise<void> {
   const services = getFirebase();
   const uid = userId();
-  if (!services || !uid || !qualifiesForDayCredit(sessionSeconds)) return;
-  const dayKey = localDayKey(new Date());
+  if (!services || !uid || !dayKey) return;
   try {
     await setDoc(
       doc(services.db, "users", uid, "days", dayKey),
       {
         counted: true,
-        sessionSeconds: Math.floor(sessionSeconds),
+        sessionSeconds,
       },
       { merge: true },
     );
@@ -103,14 +117,27 @@ export async function creditFinishedSession(sessionSeconds: number): Promise<voi
   }
 }
 
-export async function addRudimentLog(rudimentId: string, ease: Ease, note: string): Promise<void> {
+export async function deleteRudimentLog(rudimentId: string, logId: string): Promise<void> {
+  const services = getFirebase();
+  const uid = userId();
+  if (!services || !uid || !rudimentId || !logId) return;
+  try {
+    await deleteDoc(doc(services.db, "users", uid, "rudiments", rudimentId, "logs", logId));
+  } catch {
+    return;
+  }
+}
+
+export async function addRudimentLog(rudimentId: string, input: RudimentLogInput): Promise<void> {
   const services = getFirebase();
   const uid = userId();
   if (!services || !uid || !rudimentId) return;
   try {
     await addDoc(collection(services.db, "users", uid, "rudiments", rudimentId, "logs"), {
-      ease,
-      note: note.trim(),
+      ease: input.ease,
+      note: input.note.trim(),
+      startBpm: input.startBpm,
+      endBpm: input.endBpm,
       createdAt: serverTimestamp(),
     });
   } catch {
@@ -189,11 +216,15 @@ export function watchRudimentLogs(
           const data = item.data();
           const created = data.createdAt as { toMillis?: () => number } | undefined;
           const ease = Number(data.ease);
+          const startBpm = Number(data.startBpm);
+          const endBpm = Number(data.endBpm);
           return {
             id: item.id,
             ease: (ease >= 1 && ease <= 5 ? ease : 3) as Ease,
             note: typeof data.note === "string" ? data.note : "",
             createdAt: created?.toMillis?.() ?? 0,
+            startBpm: Number.isFinite(startBpm) ? startBpm : 0,
+            endBpm: Number.isFinite(endBpm) ? endBpm : Number.isFinite(startBpm) ? startBpm : 0,
           };
         }),
       );

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
-import { FeelLog } from "@/components/account/feel-log";
 import { useAuth } from "@/components/account/auth-provider";
 import { localDayKey } from "@/lib/practice-plan";
 import {
@@ -11,8 +10,8 @@ import {
   METRONOME_SOURCE,
   monthGrid,
 } from "@/lib/progress";
-import { watchPracticeDays, watchRudimentStats, type RudimentStat } from "@/lib/progress-store";
-import { getRudimentById, RUDIMENTS_DB } from "@/lib/rudiments";
+import { creditPracticeDay, watchPracticeDays, watchRudimentStats, type RudimentStat } from "@/lib/progress-store";
+import { getRudimentById } from "@/lib/rudiments";
 
 function subscribeNothing() {
   return () => undefined;
@@ -29,7 +28,6 @@ export function DashboardStudio() {
   const [monthOffset, setMonthOffset] = useState(0);
   const [days, setDays] = useState<string[]>([]);
   const [stats, setStats] = useState<RudimentStat[]>([]);
-  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -83,8 +81,7 @@ export function DashboardStudio() {
       <div className="mx-auto w-full max-w-4xl px-4 py-8">
         <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
         <p className="mt-3 text-ink">
-          Sign in with Google if you want a streak, a calendar, and notes for each rudiment.
-          Practice still works without it.
+          Sign in with Google if you want a streak and a calendar. Practice still works without it.
         </p>
         <Button tone="accent" className="mt-4" onClick={() => void signIn()}>
           Sign in with Google
@@ -102,6 +99,11 @@ export function DashboardStudio() {
         <p className="mt-1 text-sm text-muted">
           {streak === 1 ? "day in a row" : "days in a row"}
         </p>
+        {todayKey !== "today" && !practiced.has(todayKey) ? (
+          <Button tone="quiet" className="mt-4" onClick={() => void creditPracticeDay(todayKey)}>
+            Count today
+          </Button>
+        ) : null}
       </section>
 
       <section className="rounded-2xl border border-line bg-panel p-5">
@@ -161,7 +163,8 @@ export function DashboardStudio() {
         <h2 className="text-lg font-semibold text-ink">Rudiments</h2>
         <p className="mt-1 text-sm text-muted">
           A day turns green after a full practice session of at least 5 minutes, or 5 minutes on
-          the metronome, or 5 minutes on one rudiment. Open a rudiment to write how it felt.
+          the metronome, or 5 minutes on one rudiment. Write logs in Pad Gauntlet or after
+          Practice.
         </p>
         {practicedRudiments.length === 0 ? (
           <p className="mt-4 text-sm text-ink">Nothing saved yet. Play a rudiment first.</p>
@@ -170,54 +173,21 @@ export function DashboardStudio() {
             {practicedRudiments.map((item) => {
               const rudiment = getRudimentById(item.rudimentId);
               const name = rudiment?.name ?? item.rudimentId;
-              const open = openId === item.rudimentId;
               return (
-                <li key={item.rudimentId} className="rounded-2xl border border-line bg-canvas">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-                    onClick={() => setOpenId(open ? null : item.rudimentId)}
-                  >
-                    <span className="text-sm font-medium text-ink">{name}</span>
-                    <span className="font-mono text-sm text-muted">
-                      {formatPracticeTime(item.totalSeconds)}
-                    </span>
-                  </button>
-                  {open ? (
-                    <div className="border-t border-line p-3">
-                      <FeelLog rudimentId={item.rudimentId} />
-                    </div>
-                  ) : null}
+                <li
+                  key={item.rudimentId}
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-canvas px-4 py-3"
+                >
+                  <span className="text-sm font-medium text-ink">{name}</span>
+                  <span className="font-mono text-sm text-muted">
+                    {formatPracticeTime(item.totalSeconds)}
+                  </span>
                 </li>
               );
             })}
           </ul>
         )}
-        <NoteAnyRudiment practicedIds={new Set(practicedRudiments.map((item) => item.rudimentId))} />
       </section>
-    </div>
-  );
-}
-
-function NoteAnyRudiment({ practicedIds }: { practicedIds: ReadonlySet<string> }) {
-  const leftover = RUDIMENTS_DB.filter((item) => !practicedIds.has(item.id));
-  const [chosen, setChosen] = useState(leftover[0]?.id ?? "");
-  if (leftover.length === 0) return null;
-  return (
-    <div className="mt-6">
-      <p className="text-sm text-ink">Write a note for another rudiment</p>
-      <select
-        value={chosen}
-        onChange={(event) => setChosen(event.target.value)}
-        className="mt-2 w-full rounded-2xl border border-line bg-canvas px-3 py-2 text-sm text-ink outline-none focus:border-accent"
-      >
-        {leftover.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name}
-          </option>
-        ))}
-      </select>
-      {chosen ? <div className="mt-3"><FeelLog rudimentId={chosen} /></div> : null}
     </div>
   );
 }
