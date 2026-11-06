@@ -155,15 +155,19 @@ export class AudioScheduler {
   private loop = true;
   private playing = false;
   private generation = 0;
-  private nextNoteTime = 0;
-  private nextClickTime = 0;
+  // Both streams use the same musical position and beat duration. Tempo
+  // changes take effect together at the next unscheduled quarter-note beat.
+  private nextNoteBeat = 0;
+  private nextClickBeat = 0;
+  private anchorBeat = 0;
+  private anchorTime = 0;
+  private beatSeconds = quarterNoteSeconds(80);
   private noteIndex = 0;
   private clickIndex = 0;
   private repetition = 1;
   private repetitionArmed = false;
   private draining = false;
   private endTime = 0;
-  private boundaryTime = 0;
   private dispatchingBoundary = false;
   private scheduled: { index: number; time: number }[] = [];
   private lastActive: number | null = null;
@@ -201,7 +205,7 @@ export class AudioScheduler {
     this.repetitionArmed = false;
     if (this.playing) this.handlers.onRepetition(1);
     if (this.dispatchingBoundary) {
-      this.nextNoteTime = this.boundaryTime;
+      this.nextNoteBeat = this.nextClickBeat;
     }
   }
 
@@ -214,15 +218,17 @@ export class AudioScheduler {
       void context.resume();
       this.generation += 1;
       const startAt = context.currentTime + 0.06;
-      this.nextNoteTime = startAt;
-      this.nextClickTime = startAt;
+      this.nextNoteBeat = 0;
+      this.nextClickBeat = 0;
+      this.anchorBeat = 0;
+      this.anchorTime = startAt;
+      this.beatSeconds = quarterNoteSeconds(this.bpm);
       this.noteIndex = 0;
       this.clickIndex = 0;
       this.repetition = 1;
       this.repetitionArmed = false;
       this.draining = false;
       this.endTime = 0;
-      this.boundaryTime = 0;
       this.scheduled = [];
       this.lastActive = null;
       this.playing = true;
@@ -294,10 +300,13 @@ export class AudioScheduler {
     const context = this.context;
     if (!context || !this.rudiment) return;
 
-    if (this.nextNoteTime < context.currentTime - 0.05) {
-      const resumeAt = context.currentTime + 0.05;
-      this.nextNoteTime = resumeAt;
-      this.nextClickTime = Math.max(this.nextClickTime, resumeAt);
+    const nextBeat = this.draining
+      ? this.nextClickBeat
+      : Math.min(this.nextNoteBeat, this.nextClickBeat);
+    const nextTime = this.timeAtBeat(nextBeat);
+    if (nextTime < context.currentTime - 0.05) {
+      // Recover from a stalled tab by shifting the shared clock, preserving phase.
+      this.anchorTime += context.currentTime + 0.05 - nextTime;
     }
 
     const horizon = context.currentTime + SCHEDULE_AHEAD_SECONDS;
@@ -306,40 +315,42 @@ export class AudioScheduler {
       guard += 1;
       const rudiment = this.rudiment;
       if (!rudiment) break;
-      const noteDue = !this.draining && this.nextNoteTime <= horizon;
-      const clickDue = this.nextClickTime <= horizon;
-      if (!noteDue && !clickDue) break;
-      const clickFirst = clickDue && (!noteDue || this.nextClickTime <= this.nextNoteTime + 0.001);
-      if (clickFirst) {
-        this.handleClick(rudiment);
-      } else {
-        this.handleNote(rudiment);
-      }
+      const clickFirst = this.draining || this.nextClickBeat <= this.nextNoteBeat + 1e-9;
+      const beat = clickFirst ? this.nextClickBeat : this.nextNoteBeat;
+      if (this.timeAtBeat(beat) > horizon) break;
+      if (clickFirst) this.handleClick(rudiment);
+      else this.handleNote(rudiment);
     }
+  }
+
+  private timeAtBeat(beat: number): number {
+    return this.anchorTime + (beat - this.anchorBeat) * this.beatSeconds;
   }
 
   private handleClick(rudiment: Rudiment) {
     const beats = Math.max(1, Math.round(quarterNotesPerBar(rudiment)));
     const beatInBar = this.clickIndex % beats;
-    const clickTime = this.nextClickTime;
+    const clickTime = this.timeAtBeat(this.nextClickBeat);
     if (this.clickIndex > 0 && beatInBar === 0) {
-      this.boundaryTime = clickTime;
       this.dispatchingBoundary = true;
       this.handlers.onBarCompleted();
       this.dispatchingBoundary = false;
     }
+    this.anchorBeat = this.nextClickBeat;
+    this.anchorTime = clickTime;
+    this.beatSeconds = quarterNoteSeconds(this.bpm);
     if (this.metronome) {
       this.playVoice(clickTime, beatInBar === 0 ? "clickHigh" : "clickLow");
     }
     this.clickIndex += 1;
-    this.nextClickTime += quarterNoteSeconds(this.bpm);
+    this.nextClickBeat += 1;
   }
 
   private handleNote(rudiment: Rudiment) {
     const note = rudiment.notes[this.noteIndex];
     if (!note) {
       this.draining = true;
-      this.endTime = this.nextNoteTime;
+      this.endTime = this.timeAtBeat(this.nextNoteBeat);
       return;
     }
 
@@ -349,12 +360,12 @@ export class AudioScheduler {
       this.handlers.onRepetition(this.repetition);
     }
 
-    const time = this.nextNoteTime;
+    const time = this.timeAtBeat(this.nextNoteBeat);
     this.playRudimentNote(rudiment, note, time);
     this.scheduled.push({ index: this.noteIndex, time });
 
     const duration = noteDuration(note);
-    this.nextNoteTime += duration * stepSeconds(this.bpm, rudiment.subdivision);
+    this.nextNoteBeat += duration / rudiment.subdivision;
     const nextIndex = this.noteIndex + 1;
     if (nextIndex < rudiment.notes.length) {
       this.noteIndex = nextIndex;
@@ -368,20 +379,20 @@ export class AudioScheduler {
     }
 
     this.draining = true;
-    this.endTime = this.nextNoteTime;
+    this.endTime = this.timeAtBeat(this.nextNoteBeat);
     this.noteIndex = 0;
   }
 
   private playRudimentNote(rudiment: Rudiment, note: RudimentNote, time: number) {
     const ornament = note.ornament ?? "none";
     if (ornament === "flam" || ornament === "drag" || ornament === "ruff") {
-      for (const lead of graceLeadSeconds(ornament, this.bpm)) {
+      for (const lead of graceLeadSeconds(ornament, 60 / this.beatSeconds)) {
         this.playVoice(time - lead, "ghost");
       }
     }
 
     this.playVoice(time, voiceFor(note));
-    const noteSeconds = noteDuration(note) * stepSeconds(this.bpm, rudiment.subdivision);
+    const noteSeconds = noteDuration(note) * this.beatSeconds / rudiment.subdivision;
 
     if (ornament === "diddle") {
       const second = note.ghost ? "ghost" : "tap";
