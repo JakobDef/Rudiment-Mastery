@@ -1,10 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { getFirebase, googleProvider, isFirebaseConfigured } from "@/lib/firebase";
-import { creditPracticeDay } from "@/lib/progress-store";
+import { clearStorageError, getStorageError, reportStorageError, subscribeStorageError } from "@/lib/storage-errors";
 
 type AuthContextValue = {
   configured: boolean;
@@ -18,6 +18,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const storageError = useSyncExternalStore(subscribeStorageError, getStorageError, () => null);
   const configured = isFirebaseConfigured();
   const [ready, setReady] = useState(!configured);
   const [user, setUser] = useState<User | null>(null);
@@ -40,9 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
           { merge: true },
         );
-        await creditPracticeDay("2026-10-26");
-      } catch {
-        return;
+      } catch (error) {
+        reportStorageError("Your profile could not be saved.", error);
       }
     });
   }, []);
@@ -76,7 +76,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [configured, ready, user, error],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {storageError ? (
+        <div role="alert" className="flex items-center justify-between gap-3 border-b border-accent bg-panel px-4 py-3 text-sm text-accent">
+          <span>{storageError} Check your connection and try again.</span>
+          <button type="button" onClick={clearStorageError} className="shrink-0 underline">Dismiss</button>
+        </div>
+      ) : null}
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

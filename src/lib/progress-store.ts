@@ -1,3 +1,4 @@
+import { reportStorageError } from "@/lib/storage-errors";
 import {
   addDoc,
   collection,
@@ -52,11 +53,11 @@ function userId(): string | null {
   return getFirebase()?.auth.currentUser?.uid ?? null;
 }
 
-export async function recordPracticeSeconds(sourceId: string, seconds: number): Promise<void> {
+export async function recordPracticeSeconds(sourceId: string, seconds: number): Promise<boolean> {
   const services = getFirebase();
   const uid = userId();
   const safeSeconds = Math.floor(seconds);
-  if (!services || !uid || !sourceId || safeSeconds < MIN_PRACTICE_SECONDS) return;
+  if (!services || !uid || !sourceId || safeSeconds < MIN_PRACTICE_SECONDS) return false;
   const dayKey = localDayKey(new Date());
   const dayRef = doc(services.db, "users", uid, "days", dayKey);
   const rudimentRef = doc(services.db, "users", uid, "rudiments", sourceId);
@@ -76,7 +77,7 @@ export async function recordPracticeSeconds(sourceId: string, seconds: number): 
         counted: Boolean(day.counted) || qualifiesForDayCredit(next),
       };
       if (sourceId === METRONOME_SOURCE) dayUpdate.metronomeSeconds = next;
-      else dayUpdate[`rudiments.${sourceId}`] = next;
+      else dayUpdate.rudiments = { [sourceId]: next };
       tx.set(dayRef, dayUpdate, { merge: true });
       if (rudimentSnap) {
         tx.set(
@@ -89,20 +90,22 @@ export async function recordPracticeSeconds(sourceId: string, seconds: number): 
         );
       }
     });
-  } catch {
-    return;
+  } catch (error) {
+    reportStorageError("Practice time could not be saved.", error);
+    return false;
   }
+  return true;
 }
 
-export async function creditFinishedSession(sessionSeconds: number): Promise<void> {
-  if (!qualifiesForDayCredit(sessionSeconds)) return;
-  await creditPracticeDay(localDayKey(new Date()), Math.floor(sessionSeconds));
+export async function creditFinishedSession(sessionSeconds: number): Promise<boolean> {
+  if (!qualifiesForDayCredit(sessionSeconds)) return false;
+  return creditPracticeDay(localDayKey(new Date()), Math.floor(sessionSeconds));
 }
 
-export async function creditPracticeDay(dayKey: string, sessionSeconds = DAY_CREDIT_SECONDS): Promise<void> {
+export async function creditPracticeDay(dayKey: string, sessionSeconds = DAY_CREDIT_SECONDS): Promise<boolean> {
   const services = getFirebase();
   const uid = userId();
-  if (!services || !uid || !dayKey) return;
+  if (!services || !uid || !dayKey) return false;
   try {
     await setDoc(
       doc(services.db, "users", uid, "days", dayKey),
@@ -112,26 +115,30 @@ export async function creditPracticeDay(dayKey: string, sessionSeconds = DAY_CRE
       },
       { merge: true },
     );
-  } catch {
-    return;
+  } catch (error) {
+    reportStorageError("The practice day could not be saved.", error);
+    return false;
   }
+  return true;
 }
 
-export async function deleteRudimentLog(rudimentId: string, logId: string): Promise<void> {
+export async function deleteRudimentLog(rudimentId: string, logId: string): Promise<boolean> {
   const services = getFirebase();
   const uid = userId();
-  if (!services || !uid || !rudimentId || !logId) return;
+  if (!services || !uid || !rudimentId || !logId) return false;
   try {
     await deleteDoc(doc(services.db, "users", uid, "rudiments", rudimentId, "logs", logId));
-  } catch {
-    return;
+  } catch (error) {
+    reportStorageError("The log could not be deleted.", error);
+    return false;
   }
+  return true;
 }
 
-export async function addRudimentLog(rudimentId: string, input: RudimentLogInput): Promise<void> {
+export async function addRudimentLog(rudimentId: string, input: RudimentLogInput): Promise<boolean> {
   const services = getFirebase();
   const uid = userId();
-  if (!services || !uid || !rudimentId) return;
+  if (!services || !uid || !rudimentId) return false;
   try {
     await addDoc(collection(services.db, "users", uid, "rudiments", rudimentId, "logs"), {
       ease: input.ease,
@@ -140,9 +147,11 @@ export async function addRudimentLog(rudimentId: string, input: RudimentLogInput
       endBpm: input.endBpm,
       createdAt: serverTimestamp(),
     });
-  } catch {
-    return;
+  } catch (error) {
+    reportStorageError("The log could not be saved.", error);
+    return false;
   }
+  return true;
 }
 
 export function watchPracticeDays(
@@ -166,7 +175,10 @@ export function watchPracticeDays(
         })),
       );
     },
-    (error) => onError?.(error),
+    (error) => {
+      reportStorageError("Your saved progress could not be loaded.", error);
+      onError?.(error);
+    },
   );
 }
 
@@ -190,7 +202,10 @@ export function watchRudimentStats(
         })),
       );
     },
-    (error) => onError?.(error),
+    (error) => {
+      reportStorageError("Your saved progress could not be loaded.", error);
+      onError?.(error);
+    },
   );
 }
 
@@ -229,6 +244,9 @@ export function watchRudimentLogs(
         }),
       );
     },
-    (error) => onError?.(error),
+    (error) => {
+      reportStorageError("Your saved progress could not be loaded.", error);
+      onError?.(error);
+    },
   );
 }

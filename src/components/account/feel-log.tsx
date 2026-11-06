@@ -44,13 +44,13 @@ export function FeelLog({
   async function save() {
     setSaving(true);
     try {
-      await addRudimentLog(rudimentId, {
+      const saved = await addRudimentLog(rudimentId, {
         ease,
         note,
         startBpm: clampBpm(startBpm),
         endBpm: clampBpm(endBpm),
       });
-      setNote("");
+      if (saved) setNote("");
     } catch {
       setSaving(false);
       return;
