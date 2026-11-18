@@ -3,7 +3,6 @@
 import {
   SESSION_MINUTES,
   SKILL_BANDS,
-  RUDIMENT_BANDS,
   metronomeForStrokeBpm,
   suggestReplacement,
   type PracticePlan,
@@ -48,7 +47,7 @@ export function PracticeSetup({
       <div>
         <h1 className="text-2xl font-semibold text-ink">Practice</h1>
         <p className="mt-2 text-sm text-muted">
-          Pick a length, a tempo range, and how hard the rudiments should be. Tap Change if you want
+          Pick a length, a tempo range, and which rudiments to focus on. Tap Change if you want
           another matching exercise in that slot.
         </p>
       </div>
@@ -90,9 +89,13 @@ export function PracticeSetup({
       </section>
 
       <section>
-        <h2 className="text-xs font-medium tracking-wide text-muted">Rudiment difficulty</h2>
+        <h2 className="text-xs font-medium tracking-wide text-muted">Rudiment selection</h2>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          {RUDIMENT_BANDS.map((option) => (
+          {([
+            { id: "random", label: "Random", hint: "All rudiments" },
+            { id: "familiar", label: "Familiar", hint: "Most practiced half" },
+            { id: "unfamiliar", label: "Less familiar", hint: "Least practiced half" },
+          ] as const).map((option) => (
             <button
               key={option.id}
               type="button"
@@ -101,13 +104,14 @@ export function PracticeSetup({
             >
               <span className="block font-semibold">{option.label}</span>
               <span className="text-sm">
-                Level {option.min}-{option.max}
+                {option.hint}
               </span>
             </button>
           ))}
         </div>
       </section>
 
+      <p className="text-xs text-muted">Familiarity uses your saved practice time. Without practice history, all rudiments are included.</p>
       <section className="rounded-2xl border border-line bg-panel p-4">
         <h2 className="text-sm font-semibold text-ink">Today&apos;s plan</h2>
         <p className="mt-1 text-sm text-muted">

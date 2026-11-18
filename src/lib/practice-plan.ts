@@ -5,7 +5,7 @@ const SIXTEENTH_NOTES_PER_BEAT = 4;
 
 export type SessionMinutes = 5 | 10 | 15 | 20;
 export type SkillLevel = 1 | 2 | 3 | 4;
-export type RudimentBand = "easy" | "medium" | "hard";
+export type RudimentBand = "easy" | "medium" | "hard" | "random" | "familiar" | "unfamiliar";
 export type PracticePhase = "warmup" | "push";
 
 export interface SkillBand {
@@ -155,6 +155,7 @@ export function bandPool(
   band: RudimentBand,
   skill?: SkillBand,
 ): Rudiment[] {
+  if (["random", "familiar", "unfamiliar"].includes(band)) return [...catalog];
   const spec = RUDIMENT_BANDS.find((item) => item.id === band) ?? RUDIMENT_BANDS[1];
   const min = spec?.min ?? 2;
   const max = spec?.max ?? 3;
@@ -342,6 +343,7 @@ function pickRudiments(
 ): Rudiment[] {
   const pool = bandPool(catalog, band, skill);
   const shuffled = shuffle(pool, hashString(seedKey));
+  if (["random", "familiar", "unfamiliar"].includes(band)) return shuffled.slice(0, count);
   const chosen: Rudiment[] = [];
   const usedCategories = new Set<RudimentCategory>();
   for (const rudiment of shuffled) {
@@ -386,4 +388,11 @@ function hashString(input: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
+}
+
+export function familiarityPool(catalog: readonly Rudiment[], mode: RudimentBand, seconds: Readonly<Record<string, number>>): Rudiment[] {
+  if (mode === "random" || !catalog.some((item) => (seconds[item.id] ?? 0) > 0)) return [...catalog];
+  const ranked = [...catalog].sort((a, b) => (seconds[b.id] ?? 0) - (seconds[a.id] ?? 0) || a.id.localeCompare(b.id));
+  const split = Math.ceil(ranked.length / 2);
+  return mode === "familiar" ? ranked.slice(0, split) : ranked.slice(split);
 }

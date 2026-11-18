@@ -5,6 +5,7 @@ import { AudioScheduler, clampBpm } from "@/lib/audio-scheduler";
 import {
   applyRudimentIds,
   buildPracticePlan,
+  familiarityPool,
   clampTempoShift,
   currentExercise,
   exerciseBpm,
@@ -26,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { NotationView } from "@/components/gauntlet/notation-view";
 import { PracticeSessionBar, PracticeTransport } from "@/components/practice/practice-session";
 import { PracticeSetup } from "@/components/practice/practice-setup";
-import { creditFinishedSession, recordPracticeSeconds } from "@/lib/progress-store";
+import { watchRudimentStats, creditFinishedSession, recordPracticeSeconds } from "@/lib/progress-store";
 import { DAY_CREDIT_SECONDS } from "@/lib/progress";
 
 function subscribeDay() {
@@ -45,7 +46,7 @@ export function PracticeStudio() {
   const dayKey = useSyncExternalStore(subscribeDay, readDayKey, serverDayKey);
   const [minutes, setMinutes] = useState<SessionMinutes>(15);
   const [skill, setSkill] = useState<SkillLevel>(2);
-  const [band, setBand] = useState<RudimentBand>("medium");
+  const [band, setBand] = useState<RudimentBand>("random");
   const [slotIds, setSlotIds] = useState<readonly string[] | null>(null);
   const [plan, setPlan] = useState<PracticePlan | null>(null);
   const [exerciseIndex, setExerciseIndex] = useState(0);
@@ -75,6 +76,14 @@ export function PracticeStudio() {
     Record<number, { startBpm: number; endBpm: number }>
   >({});
   const { user } = useAuth();
+  const [history, setHistory] = useState<{ uid: string; seconds: Record<string, number> } | null>(null);
+  const [selectionSeed, setSelectionSeed] = useState(0);
+  useEffect(() => {
+    if (!user) return;
+    return watchRudimentStats((stats) => setHistory({ uid: user.uid, seconds: Object.fromEntries(stats.map((item) => [item.rudimentId, item.totalSeconds])) }));
+  }, [user]);
+  const catalog = useMemo(() => familiarityPool(RUDIMENTS_DB, band, history?.uid === user?.uid ? history?.seconds ?? {} : {}), [band, history, user]);
+
 
   function rememberTempo(
     index: number,
@@ -91,8 +100,8 @@ export function PracticeStudio() {
   }
 
   const basePlan = useMemo(
-    () => buildPracticePlan({ minutes, skill, band, dayKey }, RUDIMENTS_DB),
-    [minutes, skill, band, dayKey],
+    () => buildPracticePlan({ minutes, skill, band, dayKey: `${dayKey}|${selectionSeed}` }, catalog),
+    [minutes, skill, band, dayKey, selectionSeed, catalog],
   );
   const previewIds =
     slotIds && slotIds.length === basePlan.rudimentIds.length ? slotIds : basePlan.rudimentIds;
@@ -242,7 +251,7 @@ export function PracticeStudio() {
   }
 
   function swapSetupSlot(slot: number) {
-    const nextId = suggestReplacement(previewPlan, slot, RUDIMENTS_DB);
+    const nextId = suggestReplacement(previewPlan, slot, catalog);
     if (!nextId) return;
     setSlotIds(previewIds.map((id, index) => (index === slot ? nextId : id)));
   }
@@ -252,7 +261,7 @@ export function PracticeStudio() {
     const currentPlan = planRef.current;
     if (!currentPlan) return;
     const slot = slotForExercise(currentPlan, exerciseIndexRef.current);
-    const nextId = suggestReplacement(currentPlan, slot, RUDIMENTS_DB);
+    const nextId = suggestReplacement(currentPlan, slot, catalog);
     if (!nextId) return;
     const nextPlan = replaceFromExercise(currentPlan, exerciseIndexRef.current, nextId);
     planRef.current = nextPlan;
@@ -403,6 +412,7 @@ export function PracticeStudio() {
           }}
           onBand={(next) => {
             setBand(next);
+            setSelectionSeed(Math.random());
             setSlotIds(null);
           }}
           onSwapSlot={swapSetupSlot}
@@ -421,7 +431,7 @@ export function PracticeStudio() {
         bpm={bpm}
         tempoShift={tempoShift}
         finished={finished}
-        canSwap={suggestReplacement(plan, slotForExercise(plan, exerciseIndex), RUDIMENTS_DB) !== null}
+        canSwap={suggestReplacement(plan, slotForExercise(plan, exerciseIndex), catalog) !== null}
         onBpm={setTempoFromBpm}
         onNudge={nudgeTempo}
         onBack={backToSetup}
