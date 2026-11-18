@@ -61,7 +61,7 @@ export function skillBand(level: SkillLevel): SkillBand {
 }
 
 export function rudimentCountForMinutes(minutes: SessionMinutes): number {
-  return minutes === 5 ? 2 : 3;
+  return minutes === 5 ? 1 : minutes === 10 ? 2 : 3;
 }
 
 export function localDayKey(date: Date): string {

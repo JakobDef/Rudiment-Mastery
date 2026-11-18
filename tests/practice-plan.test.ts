@@ -19,20 +19,17 @@ import {
 import { RUDIMENTS_DB, getRudimentById } from "@/lib/rudiments";
 
 describe("practice plan", () => {
-  it("uses two rudiments for 5 minutes and three for longer sessions", () => {
-    expect(rudimentCountForMinutes(5)).toBe(2);
-    const shortPlan = buildPracticePlan(
-      { minutes: 5, skill: 2, band: "medium", dayKey: "2026-10-18" },
+  it.each([
+    [5, 1], [10, 2], [15, 3], [20, 3],
+  ] as const)("uses %i minutes for a plan with %i rudiments", (minutes, count) => {
+    expect(rudimentCountForMinutes(minutes)).toBe(count);
+    const plan = buildPracticePlan(
+      { minutes, skill: 2, band: "medium", dayKey: "2026-10-18" },
       RUDIMENTS_DB,
     );
-    const longPlan = buildPracticePlan(
-      { minutes: 15, skill: 2, band: "medium", dayKey: "2026-10-18" },
-      RUDIMENTS_DB,
-    );
-    expect(shortPlan.rudimentIds).toHaveLength(2);
-    expect(shortPlan.exercises).toHaveLength(4);
-    expect(longPlan.rudimentIds).toHaveLength(3);
-    expect(longPlan.exercises).toHaveLength(6);
+    expect(plan.rudimentIds).toHaveLength(count);
+    expect(plan.exercises).toHaveLength(count * 2);
+    expect(plan.exercises.reduce((sum, exercise) => sum + exercise.durationSeconds, 0)).toBe(minutes * 60);
   });
 
   it("warms up every chosen rudiment before playing them faster", () => {

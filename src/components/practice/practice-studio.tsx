@@ -441,6 +441,18 @@ export function PracticeStudio() {
         onNext={goNext}
       />
       {audioError ? <p className="text-sm text-accent">{audioError}</p> : null}
+      {!finished && user && rudiment ? (
+        <section className="rounded-2xl border border-line bg-panel p-4">
+          <h3 className="text-lg font-semibold text-ink">Recent logs · {rudiment.name}</h3>
+          <p className="mt-1 mb-3 text-sm text-muted">Your last three entries to guide this exercise.</p>
+          <FeelLog
+            key={`${user.uid}-${rudiment.id}`}
+            rudimentId={rudiment.id}
+            showForm={false}
+            historyLimit={3}
+          />
+        </section>
+      ) : null}
       {finished && user ? (
         <section className="rounded-2xl border border-line bg-panel p-4">
           <h3 className="text-lg font-semibold text-ink">How did it feel?</h3>

@@ -15,6 +15,7 @@ export function FeelLog({
   lockBpm = false,
   showForm = true,
   showHistory = true,
+  historyLimit,
 }: {
   rudimentId: string;
   title?: string;
@@ -23,6 +24,7 @@ export function FeelLog({
   lockBpm?: boolean;
   showForm?: boolean;
   showHistory?: boolean;
+  historyLimit?: number;
 }) {
   const { user } = useAuth();
   const [ease, setEase] = useState<Ease>(3);
@@ -37,7 +39,7 @@ export function FeelLog({
     return watchRudimentLogs(rudimentId, setLogs);
   }, [user, rudimentId]);
 
-  const shownLogs = user ? logs : [];
+  const shownLogs = user ? logs.slice(0, historyLimit) : [];
 
   if (!user) return null;
 

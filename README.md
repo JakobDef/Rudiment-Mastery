@@ -3,6 +3,7 @@
 Practice clock on the home page. Pad Gauntlet holds the rudiment library, notation, pad sounds, and speed workout.
 
 ```bash
+nvm use
 npm run dev
 ```
 
