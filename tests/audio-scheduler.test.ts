@@ -31,7 +31,7 @@ function harness(rudiment: Rudiment) {
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-function pattern(subdivision: 2 | 3 | 4 | 6, duration = 1): Rudiment {
+function pattern(subdivision: 2 | 3 | 4 | 5 | 6, duration = 1): Rudiment {
   return {
     ...RUDIMENTS_DB[0]!, subdivision, timeSignature: [4, 4],
     notes: Array.from({ length: 4 * subdivision / duration }, () => ({ hand: "R", duration })),
@@ -52,7 +52,7 @@ function expectAligned(clicks: number[], notes: number[], notesPerBeat: number) 
 }
 
 describe("shared rudiment and metronome clock", () => {
-  it.each([2, 3, 4, 6] as const)("keeps subdivision %i aligned through five minutes of tempo changes", (subdivision) => {
+  it.each([2, 3, 4, 5, 6] as const)("keeps subdivision %i aligned through five minutes of tempo changes", (subdivision) => {
     const { scheduler, clock, context, clicks, notes } = harness(pattern(subdivision));
     for (let tick = 1; tick <= 12000; tick += 1) {
       context.currentTime = tick * 0.025;

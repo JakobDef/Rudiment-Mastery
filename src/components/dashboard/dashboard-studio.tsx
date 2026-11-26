@@ -6,6 +6,7 @@ import { useAuth } from "@/components/account/auth-provider";
 import { localDayKey } from "@/lib/practice-plan";
 import {
   currentStreak,
+  oneOffStreak,
   formatPracticeTime,
   METRONOME_SOURCE,
   monthGrid,
@@ -13,13 +14,18 @@ import {
 import { creditPracticeDay, watchPracticeDays, watchRudimentStats, type RudimentStat } from "@/lib/progress-store";
 import { getRudimentById } from "@/lib/rudiments";
 
-function subscribeNothing() {
-  return () => undefined;
+function subscribeDay(onChange: () => void) {
+  const timer = window.setInterval(onChange, 30_000);
+  window.addEventListener("focus", onChange);
+  return () => {
+    window.clearInterval(timer);
+    window.removeEventListener("focus", onChange);
+  };
 }
 
 export function DashboardStudio() {
   const { configured, ready, user, error, signIn } = useAuth();
-  const todayKey = useSyncExternalStore(subscribeNothing, () => localDayKey(new Date()), () => "today");
+  const todayKey = useSyncExternalStore(subscribeDay, () => localDayKey(new Date()), () => "today");
   const today = useMemo(() => {
     if (todayKey === "today") return new Date(2026, 9, 21);
     const parts = todayKey.split("-").map((part) => Number(part));
@@ -46,6 +52,7 @@ export function DashboardStudio() {
   const cursor = { year: cursorDate.getFullYear(), month: cursorDate.getMonth() + 1 };
   const practiced = useMemo(() => new Set(user ? days : []), [user, days]);
   const streak = todayKey === "today" ? 0 : currentStreak(practiced, todayKey);
+  const forgivingStreak = todayKey === "today" ? 0 : oneOffStreak(practiced, todayKey);
   const cells = monthGrid(cursor.year, cursor.month, practiced, todayKey);
   const monthLabel = new Date(cursor.year, cursor.month - 1, 1).toLocaleString("en", {
     month: "long",
@@ -104,6 +111,16 @@ export function DashboardStudio() {
             Count today
           </Button>
         ) : null}
+      </section>
+
+      <section className="rounded-2xl border border-line bg-panel p-5">
+        <p className="text-xs font-medium tracking-wide text-muted">1-off streak</p>
+        <p className="mt-2 font-mono text-6xl text-ink">{forgivingStreak}</p>
+        <p className="mt-1 text-sm text-muted">{forgivingStreak === 1 ? "practice day" : "practice days"}</p>
+        <p className="mt-3 text-sm text-muted">
+          One missed day is allowed and adds no points. Two missed days in a row reset this streak.
+          Today stays open until midnight.
+        </p>
       </section>
 
       <section className="rounded-2xl border border-line bg-panel p-5">

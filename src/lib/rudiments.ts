@@ -24,8 +24,8 @@ export interface Rudiment {
   category: RudimentCategory;
   difficulty: Difficulty;
   timeSignature: [number, number];
-  /** Notes per quarter-note beat (e.g., 2 = 8ths, 3 = 8th triplets, 4 = 16ths, 6 = sextuplets) */
-  subdivision: 2 | 3 | 4 | 6;
+  /** Notes per quarter-note beat (e.g., 2 = 8ths, 3 = 8th triplets, 4 = 16ths, 5 = quintuplets, 6 = sextuplets) */
+  subdivision: 2 | 3 | 4 | 5 | 6;
   defaultBpm: number;
   targetBpm: number;
   description: string;

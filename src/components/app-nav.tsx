@@ -6,10 +6,10 @@ import { useAuth } from "@/components/account/auth-provider";
 import { Button } from "@/components/ui/button";
 
 const LINKS = [
-  { href: "/", label: "Metronome" },
+  { href: "/", label: "Dashboard" },
+  { href: "/metronome", label: "Metronome" },
   { href: "/practice", label: "Practice" },
   { href: "/gauntlet", label: "Pad Gauntlet" },
-  { href: "/dashboard", label: "Dashboard" },
 ] as const;
 
 export function AppNav() {
@@ -21,7 +21,7 @@ export function AppNav() {
       <nav className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-3">
         <span className="mr-3 font-semibold text-ink">Rudiment Mastery</span>
         {LINKS.map((link) => {
-          const active = pathname === link.href;
+          const active = pathname === link.href || (link.href === "/" && pathname === "/dashboard");
           return (
             <Link
               key={link.href}

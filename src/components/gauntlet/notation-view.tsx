@@ -45,8 +45,9 @@ export function beatsPerNotationLine({
   return fitBeats;
 }
 
-function beamLevels(duration: number, subdivision: number): number {
-  const fraction = duration / subdivision;
+export function beamLevels(duration: number, subdivision: number): number {
+  const writtenSubdivision = subdivision === 5 || subdivision === 6 ? 4 : subdivision === 3 ? 2 : subdivision;
+  const fraction = duration / writtenSubdivision;
   if (fraction >= 0.999) return 0;
   if (fraction >= 0.49) return 1;
   if (fraction >= 0.24) return 2;
@@ -205,7 +206,7 @@ function TupletMarks({
   groups: LaidOutNote[][];
   subdivision: number;
 }) {
-  if (subdivision !== 3 && subdivision !== 6) return null;
+  if (subdivision !== 3 && subdivision !== 5 && subdivision !== 6) return null;
   return (
     <g>
       {groups.map((group, groupIndex) => {

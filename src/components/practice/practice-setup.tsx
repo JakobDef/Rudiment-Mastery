@@ -116,7 +116,7 @@ export function PracticeSetup({
         <h2 className="text-sm font-semibold text-ink">Today&apos;s plan</h2>
         <p className="mt-1 text-sm text-muted">
           Speeds match 16th notes at {plan.warmupLow}-{plan.warmupHigh} BPM, then the same ones faster
-          at {plan.pushLow}-{plan.pushHigh} BPM. Sextuplets and triplets are scaled so the strokes
+          at {plan.pushLow}-{plan.pushHigh} BPM. Tuplets are scaled so the strokes
           stay in that range.
         </p>
         <ul className="mt-3 flex flex-col gap-2">

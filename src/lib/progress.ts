@@ -99,3 +99,20 @@ export function formatPracticeTime(totalSeconds: number): string {
   if (minutes > 0) return `${minutes} min`;
   return `${seconds}s`;
 }
+
+/** Count practiced days, allowing isolated missed days. Today is still in progress. */
+export function oneOffStreak(practicedDays: ReadonlySet<string>, todayKey: string): number {
+  let cursor = practicedDays.has(todayKey) ? todayKey : addDayKey(todayKey, -1);
+  let missed = 0;
+  let count = 0;
+  while (missed < 2) {
+    if (practicedDays.has(cursor)) {
+      count += 1;
+      missed = 0;
+    } else {
+      missed += 1;
+    }
+    cursor = addDayKey(cursor, -1);
+  }
+  return count;
+}
